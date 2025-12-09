@@ -3,544 +3,630 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>ONNX CIFAR‑10 VGG — FP16 / INT8</title>
+<title>ONNX CIFAR‑10 VGG — FP32 / INT8 Comparison</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" />
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 <style>
-  :root {
-    --gap: 14px;
-    --radius: 10px;
-    --bg: #0b1324;
-    --panel: #121a2f;
-    --text: #e5ecff;
-    --muted: #9fb0d0;
-    --accent: #7aa2ff;
-  }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; }
-  body {
-    margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, sans-serif;
-    color: var(--text); background: linear-gradient(180deg,#090f20,#0d1327 60%, #0b1324);
-  }
-  .page { max-width: 980px; margin: 0 auto; padding: 20px; }
-  h1 { margin: 12px 0 8px; text-align: center; font-size: clamp(20px, 3vw, 28px); }
-  .grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: var(--gap); }
-  .card { background: var(--panel); border: 1px solid #1f2b4b; border-radius: var(--radius); padding: 14px; }
-  fieldset { border: 1px dashed #2b3b65; border-radius: var(--radius); padding: 12px; }
-  legend { color: var(--muted); padding: 0 6px; }
-  label { display: grid; grid-template-columns: 140px 1fr; align-items: center; gap: 8px; margin: 8px 0; }
-  input, select { width: 100%; border: 1px solid #2b3b65; background: #0e1530; color: var(--text); padding: 8px 10px; border-radius: 8px; }
-  input[type="number"] { appearance: textfield; }
-  button { cursor: pointer; border: 1px solid #2b3b65; background: #122045; color: var(--text); padding: 9px 12px; border-radius: 10px; font-weight: 600; }
-  button.primary { background: #15316e; border-color: #2a4aa0; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .drop { border: 1px dashed #2b3b65; border-radius: 12px; padding: 14px; text-align: center; color: var(--muted); }
-  .drop.drag { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent), transparent 70%); }
-  img.preview { max-width: 160px; max-height: 160px; border: 1px solid #203055; border-radius: 8px; background: #0b1128; image-rendering: pixelated; }
-  pre.log { background: #0b1128; border: 1px solid #1f2b4b; border-radius: var(--radius); padding: 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; }
-  .pill { display:inline-flex; align-items:center; gap:6px; border:1px solid #28406f; background:#112047; padding:6px 10px; border-radius:999px; font-size: 13px; }
-  .badge { background:#1e2f5a; padding:4px 8px; border-radius:8px; }
-  .flex { display:flex; gap: var(--gap); }
-  .grow { flex: 1 1 auto; }
+  :root {
+    --gap: 14px;
+    --radius: 10px;
+    --bg: #0b1324;
+    --panel: #121a2f;
+    --text: #e5ecff;
+    --muted: #9fb0d0;
+    --accent: #7aa2ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, sans-serif;
+    color: var(--text); background: linear-gradient(180deg,#090f20,#0d1327 60%, #0b1324);
+  }
+  .page { max-width: 980px; margin: 0 auto; padding: 20px; }
+  h1 { margin: 12px 0 8px; text-align: center; font-size: clamp(20px, 3vw, 28px); }
+  .grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: var(--gap); }
+  .card { background: var(--panel); border: 1px solid #1f2b4b; border-radius: var(--radius); padding: 14px; }
+  fieldset { border: 1px dashed #2b3b65; border-radius: var(--radius); padding: 12px; }
+  legend { color: var(--muted); padding: 0 6px; }
+  label { display: grid; grid-template-columns: 140px 1fr; align-items: center; gap: 8px; margin: 8px 0; }
+  input, select { width: 100%; border: 1px solid #2b3b65; background: #0e1530; color: var(--text); padding: 8px 10px; border-radius: 8px; }
+  input[type="number"] { appearance: textfield; }
+  button { cursor: pointer; border: 1px solid #2b3b65; background: #122045; color: var(--text); padding: 9px 12px; border-radius: 10px; font-weight: 600; }
+  button.primary { background: #15316e; border-color: #2a4aa0; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .drop { border: 1px dashed #2b3b65; border-radius: 12px; padding: 14px; text-align: center; color: var(--muted); }
+  .drop.drag { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent), transparent 70%); }
+  img.preview { max-width: 160px; max-height: 160px; border: 1px solid #203055; border-radius: 8px; background: #0b1128; image-rendering: pixelated; }
+  pre.log { background: #0b1128; border: 1px solid #1f2b4b; border-radius: var(--radius); padding: 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; }
+  .pill { display:inline-flex; align-items:center; gap:6px; border:1px solid #28406f; background:#112047; padding:6px 10px; border-radius:999px; font-size: 13px; }
+  .badge { background:#1e2f5a; padding:4px 8px; border-radius:8px; }
+  .flex { display:flex; gap: var(--gap); }
+  .grow { flex: 1 1 auto; }
 
-  @media (max-width: 860px) {
-    .grid { grid-template-columns: 1fr; }
-  }
-  .hint { color: var(--muted); font-size: 12px; }
-  .hide { display:none; }
+  @media (max-width: 860px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+  .hint { color: var(--muted); font-size: 12px; }
+  .hide { display:none; }
 </style>
 </head>
 <body>
-  <div class="page">
-    <h1>ONNX CIFAR‑10 VGG — FP16 / INT8</h1>
+  <div class="page">
+    <h1>ONNX CIFAR‑10 模型比較</h1>
 
-    <div class="grid">
-      <!-- Left: IO + Results -->
-      <div class="card">
-        <div class="row" style="justify-content:space-between;">
-          <div class="row">
-            <span class="pill"><strong>Status</strong> <span id="status">Idle</span></span>
-            <span class="pill">EP: <span id="epLabel">—</span></span>
-          </div>
-          <div class="row">
-            <button id="loadBtn" class="primary">Load / Reload Model</button>
-            <button id="runBtn">Run Inference</button>
-          </div>
+    <div class="grid">
+            <div class="card">
+        <div class="row" style="justify-content:space-between;">
+          <div class="row">
+            <span class="pill"><strong>Status</strong> <span id="status">Idle</span></span>
+            <span class="pill">EP: <span id="epLabel">—</span></span>
+          </div>
+          <div class="row">
+            <button id="loadBtn" class="primary">Load / Reload Models</button>             <button id="compareBtn" style="background:#5e7c3c; border-color:#82a95c;">Run Comparison</button>             <button id="runBtn" class="hide">Run Inference</button>           </div>
+        </div>
+
+        <div class="row" style="margin-top: 8px; align-items:flex-start;">
+          <div class="grow">
+            <div id="drop" class="drop">把圖片拖曳到此處，或
+              <label style="display:inline-grid; grid-template-columns:auto auto; gap:8px; align-items:center;">
+                <input id="file" type="file" accept="image/*" style="display:none;"/>
+                <button type="button">選擇檔案…</button>
+              </label>
+            </div>
+            <div class="row" style="margin-top: 10px;">
+              <img id="preview" class="preview" alt="preview" />
+              <div>
+                <div class="badge" id="pred1">—</div>
+                <div class="badge" id="pred2" style="margin-top:6px;">—</div>
+                <div class="badge" id="pred3" style="margin-top:6px;">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div id="compareResult" style="margin-top: 15px; border-top: 1px solid #1f2b4b; padding-top: 15px;">
+            <p style="color:var(--muted); text-align:center;">點擊 "Run Comparison" 後，此處將顯示 FP32 與 INT8 模型的結果比較。</p>
         </div>
 
-        <div class="row" style="margin-top: 8px; align-items:flex-start;">
-          <div class="grow">
-            <div id="drop" class="drop">把圖片拖曳到此處，或
-              <label style="display:inline-grid; grid-template-columns:auto auto; gap:8px; align-items:center;">
-                <input id="file" type="file" accept="image/*" style="display:none;"/>
-                <button type="button">選擇檔案…</button>
-              </label>
-            </div>
-            <div class="row" style="margin-top: 10px;">
-              <img id="preview" class="preview" alt="preview" />
-              <div>
-                <div class="badge" id="pred1">—</div>
-                <div class="badge" id="pred2" style="margin-top:6px;">—</div>
-                <div class="badge" id="pred3" style="margin-top:6px;">—</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <h3>Log</h3>
+        <pre id="log" class="log">Ready.</pre>
+      </div>
 
-        <h3>Log</h3>
-        <pre id="log" class="log">Ready.</pre>
-      </div>
+            <div class="card">
+        <fieldset>
+          <legend>Model</legend>
+          <label>
+            <span>FP32 Model URL</span>             <input id="modelUrlFP32" type="text" value="./resnet_exported.onnx" />
+          </label>
+          <label>
+            <span>INT8 Model URL</span>             <input id="modelUrlINT8" type="text" value="./image_classifier_model_int8.onnx" />
+          </label>
+          <label>
+            <span>Execution Provider</span>
+            <select id="provider">
+              <option value="wasm">wasm (default)</option>
+              <option value="webgl">webgl</option>
+            </select>
+          </label>
+        </fieldset>
 
-      <!-- Right: Settings -->
-      <div class="card">
-        <fieldset>
-          <legend>Model</legend>
-          <label>
-            <span>Model URL</span>
-            <input id="modelUrl" type="text" value="./model.onnx" />
-          </label>
-          <label>
-            <span>Execution Provider</span>
-            <select id="provider">
-              <option value="wasm">wasm (default)</option>
-              <option value="webgl">webgl</option>
-            </select>
-          </label>
-        </fieldset>
+        <fieldset style="margin-top: var(--gap)">
+          <legend>Input</legend>
+          <label>
+            <span>Size (W×H)</span>
+            <div class="row">
+              <input id="inW" type="number" min="8" value="32" style="max-width:90px" />
+              <input id="inH" type="number" min="8" value="32" style="max-width:90px" />
+            </div>
+          </label>
+          <label>
+            <span>Channels</span>
+            <select id="channels">
+              <option value="3" selected>3 (RGB)</option>
+              <option value="1">1 (Grayscale)</option>
+            </select>
+          </label>
+          <label>
+            <span>Color Order</span>
+            <select id="colorOrder">
+              <option value="RGB" selected>RGB</option>
+              <option value="BGR">BGR</option>
+            </select>
+          </label>
+          <label>
+            <span>Keep Aspect</span>
+            <select id="keepAspect">
+              <option value="cover" selected>Center crop (cover)</option>
+              <option value="contain">Letterbox (contain)</option>
+              <option value="stretch">Stretch</option>
+            </select>
+          </label>
+        </fieldset>
 
-        <fieldset style="margin-top: var(--gap)">
-          <legend>Input</legend>
-          <label>
-            <span>Size (W×H)</span>
-            <div class="row">
-              <input id="inW" type="number" min="8" value="32" style="max-width:90px" />
-              <input id="inH" type="number" min="8" value="32" style="max-width:90px" />
-            </div>
-          </label>
-          <label>
-            <span>Channels</span>
-            <select id="channels">
-              <option value="3" selected>3 (RGB)</option>
-              <option value="1">1 (Grayscale)</option>
-            </select>
-          </label>
-          <label>
-            <span>Color Order</span>
-            <select id="colorOrder">
-              <option value="RGB" selected>RGB</option>
-              <option value="BGR">BGR</option>
-            </select>
-          </label>
-          <label>
-            <span>Keep Aspect</span>
-            <select id="keepAspect">
-              <option value="cover" selected>Center crop (cover)</option>
-              <option value="contain">Letterbox (contain)</option>
-              <option value="stretch">Stretch</option>
-            </select>
-          </label>
-        </fieldset>
+        <fieldset style="margin-top: var(--gap)">
+          <legend>Preprocessing</legend>
+          <label>
+            <span>Mean (per‑ch)</span>
+            <input id="mean" type="text" value="0.4914,0.4822,0.4465" />
+          </label>
+          <label>
+            <span>Std (per‑ch)</span>
+            <input id="std" type="text" value="0.247,0.243,0.261" />
+          </label>
+          <label>
+            <span>Scale</span>
+            <select id="scale">
+              <option value="1/255" selected>Divide by 255</option>
+              <option value="none">No scaling</option>
+            </select>
+          </label>
+          <label>
+            <span>Layout</span>
+            <select id="layout">
+              <option value="NCHW" selected>NCHW</option>
+              <option value="NHWC">NHWC</option>
+            </select>
+          </label>
+        </fieldset>
 
-        <fieldset style="margin-top: var(--gap)">
-          <legend>Preprocessing</legend>
-          <label>
-            <span>Mean (per‑ch)</span>
-            <input id="mean" type="text" value="0.4914,0.4822,0.4465" />
-          </label>
-          <label>
-            <span>Std (per‑ch)</span>
-            <input id="std" type="text" value="0.247,0.243,0.261" />
-          </label>
-          <label>
-            <span>Scale</span>
-            <select id="scale">
-              <option value="1/255" selected>Divide by 255</option>
-              <option value="none">No scaling</option>
-            </select>
-          </label>
-          <label>
-            <span>Layout</span>
-            <select id="layout">
-              <option value="NCHW" selected>NCHW</option>
-              <option value="NHWC">NHWC</option>
-            </select>
-          </label>
-        </fieldset>
+        <fieldset style="margin-top: var(--gap)">
+          <legend>Precision / Quantization</legend>
+          <label>
+            <span>Input dtype</span>
+            <select id="dtype">
+              <option value="float32" selected>float32</option>
+              <option value="float16">float16 (FP16)</option>
+              <option value="int8">int8 (量化)</option>
+            </select>
+          </label>
+          <div id="qInBox" class="hide">
+            <label>
+              <span>IN scale</span>
+              <input id="qInScale" type="number" step="any" value="0.02" />
+            </label>
+            <label>
+              <span>IN zeroPoint</span>
+              <input id="qInZero" type="number" step="1" value="0" />
+            </label>
+            <div class="hint">int8 會使用: q = round(x/scale) + zeroPoint，並夾到 [−128,127]</div>
+          </div>
+          <label>
+            <span>Output quantized?</span>
+            <select id="outQuant">
+              <option value="no" selected>No</option>
+              <option value="int8">Yes (int8)</option>
+            </select>
+          </label>
+          <div id="qOutBox" class="hide">
+            <label>
+              <span>OUT scale</span>
+              <input id="qOutScale" type="number" step="any" value="0.04" />
+            </label>
+            <label>
+              <span>OUT zeroPoint</span>
+              <input id="qOutZero" type="number" step="1" value="0" />
+            </label>
+            <div class="hint">將輸出反量化: x = (q - zeroPoint) * scale</div>
+          </div>
+        </fieldset>
 
-        <fieldset style="margin-top: var(--gap)">
-          <legend>Precision / Quantization</legend>
-          <label>
-            <span>Input dtype</span>
-            <select id="dtype">
-              <option value="float32" selected>float32</option>
-              <option value="float16">float16 (FP16)</option>
-              <option value="int8">int8 (量化)</option>
-            </select>
-          </label>
-          <div id="qInBox" class="hide">
-            <label>
-              <span>IN scale</span>
-              <input id="qInScale" type="number" step="any" value="0.02" />
-            </label>
-            <label>
-              <span>IN zeroPoint</span>
-              <input id="qInZero" type="number" step="1" value="0" />
-            </label>
-            <div class="hint">int8 會使用: q = round(x/scale) + zeroPoint，並夾到 [−128,127]</div>
-          </div>
-          <label>
-            <span>Output quantized?</span>
-            <select id="outQuant">
-              <option value="no" selected>No</option>
-              <option value="int8">Yes (int8)</option>
-            </select>
-          </label>
-          <div id="qOutBox" class="hide">
-            <label>
-              <span>OUT scale</span>
-              <input id="qOutScale" type="number" step="any" value="0.04" />
-            </label>
-            <label>
-              <span>OUT zeroPoint</span>
-              <input id="qOutZero" type="number" step="1" value="0" />
-            </label>
-            <div class="hint">將輸出反量化: x = (q - zeroPoint) * scale</div>
-          </div>
-        </fieldset>
-
-        <fieldset style="margin-top: var(--gap)">
-          <legend>Post‑processing</legend>
-          <label>
-            <span>Top‑K</span>
-            <input id="topk" type="number" min="1" max="10" value="3" />
-          </label>
-          <label>
-            <span>Classes (CSV)</span>
-            <input id="classes" type="text" value="airplane,automobile,bird,cat,deer,dog,frog,horse,ship,truck" />
-          </label>
-        </fieldset>
-      </div>
-    </div>
-  </div>
+        <fieldset style="margin-top: var(--gap)">
+          <legend>Post‑processing</legend>
+          <label>
+            <span>Top‑K</span>
+            <input id="topk" type="number" min="1" max="10" value="3" />
+          </label>
+          <label>
+            <span>Classes (CSV)</span>
+            <input id="classes" type="text" value="airplane,automobile,bird,cat,deer,dog,frog,horse,ship,truck" />
+          </label>
+        </fieldset>
+      </div>
+    </div>
+  </div>
 
 <script>
 (() => {
-  const $ = (id) => document.getElementById(id);
-  const els = {
-    status: $("status"), epLabel: $("epLabel"), log: $("log"),
-    file: $("file"), drop: $("drop"), preview: $("preview"),
-    pred1: $("pred1"), pred2: $("pred2"), pred3: $("pred3"),
-    loadBtn: $("loadBtn"), runBtn: $("runBtn"),
-    modelUrl: $("modelUrl"), provider: $("provider"),
-    inW: $("inW"), inH: $("inH"), channels: $("channels"), colorOrder: $("colorOrder"), keepAspect: $("keepAspect"),
-    mean: $("mean"), std: $("std"), scale: $("scale"), layout: $("layout"),
-    dtype: $("dtype"), qInBox: $("qInBox"), qInScale: $("qInScale"), qInZero: $("qInZero"),
-    outQuant: $("outQuant"), qOutBox: $("qOutBox"), qOutScale: $("qOutScale"), qOutZero: $("qOutZero"),
-    topk: $("topk"), classes: $("classes"),
-  };
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    status: $("status"), epLabel: $("epLabel"), log: $("log"),
+    file: $("file"), drop: $("drop"), preview: $("preview"),
+    pred1: $("pred1"), pred2: $("pred2"), pred3: $("pred3"),
+    loadBtn: $("loadBtn"), runBtn: $("runBtn"), compareBtn: $("compareBtn"), // ⭐ 新增 compareBtn
+    modelUrlFP32: $("modelUrlFP32"), modelUrlINT8: $("modelUrlINT8"), // ⭐ 新增雙模型 URL
+    provider: $("provider"), compareResult: $("compareResult"), // ⭐ 新增比較結果 DIV
+    inW: $("inW"), inH: $("inH"), channels: $("channels"), colorOrder: $("colorOrder"), keepAspect: $("keepAspect"),
+    mean: $("mean"), std: $("std"), scale: $("scale"), layout: $("layout"),
+    dtype: $("dtype"), qInBox: $("qInBox"), qInScale: $("qInScale"), qInZero: $("qInZero"),
+    outQuant: $("outQuant"), qOutBox: $("qOutBox"), qOutScale: $("qOutScale"), qOutZero: $("qOutZero"),
+    topk: $("topk"), classes: $("classes"),
+  };
 
-  /*** Utilities ***/
-  const log = (msg) => { console.log(msg); els.log.textContent = String(msg); };
-  const logAdd = (msg) => { console.log(msg); els.log.textContent += "\n" + msg; };
-  const parseCSV = (txt, fallback=[]) => {
-    try { const arr = txt.split(',').map(s => s.trim()).filter(Boolean); return arr.length ? arr : fallback; } catch { return fallback; }
-  };
-  const parseCSVNums = (txt, fallback=[]) => {
-    const arr = parseCSV(txt, []).map(Number).map(v => Number.isFinite(v) ? v : NaN);
-    return arr.every(Number.isFinite) && arr.length ? arr : fallback;
-  };
-  const softmax = (logits) => {
-    const max = Math.max(...logits);
-    const exps = logits.map(v => Math.exp(v - max));
-    const sum = exps.reduce((a,b)=>a+b,0);
-    return exps.map(v => v / (sum || 1));
-  };
-  const topK = (probs, k=3) => probs.map((p,i)=>[i,p]).sort((a,b)=>b[1]-a[1]).slice(0, k);
+  /*** Utilities ***/
+  const log = (msg) => { console.log(msg); els.log.textContent = String(msg); };
+  const logAdd = (msg) => { console.log(msg); els.log.textContent += "\n" + msg; };
+  const parseCSV = (txt, fallback=[]) => {
+    try { const arr = txt.split(',').map(s => s.trim()).filter(Boolean); return arr.length ? arr : fallback; } catch { return fallback; }
+  };
+  const parseCSVNums = (txt, fallback=[]) => {
+    const arr = parseCSV(txt, []).map(Number).map(v => Number.isFinite(v) ? v : NaN);
+    return arr.every(Number.isFinite) && arr.length ? arr : fallback;
+  };
+  const softmax = (logits) => {
+    const max = Math.max(...logits);
+    const exps = logits.map(v => Math.exp(v - max));
+    const sum = exps.reduce((a,b)=>a+b,0);
+    return exps.map(v => v / (sum || 1));
+  };
+  const topK = (probs, k=3) => probs.map((p,i)=>[i,p]).sort((a,b)=>b[1]-a[1]).slice(0, k);
 
-  // float32 -> IEEE754 half (Uint16) 轉換
-  function f32ToF16Bits(val) {
-    const f32 = new Float32Array(1); const u32 = new Uint32Array(f32.buffer);
-    f32[0] = val; const x = u32[0];
-    const sign = (x >>> 31) & 0x1;
-    let exp = (x >>> 23) & 0xFF;
-    let mant = x & 0x7FFFFF;
-    if (exp === 0xFF) { // inf or NaN
-      const f16 = (sign<<15) | 0x7C00 | (mant ? 0x200 : 0);
-      return f16;
+  // float32 -> IEEE754 half (Uint16) 轉換 (保留原始複雜功能)
+  function f32ToF16Bits(val) {
+    const f32 = new Float32Array(1); const u32 = new Uint32Array(f32.buffer);
+    f32[0] = val; const x = u32[0];
+    const sign = (x >>> 31) & 0x1;
+    let exp = (x >>> 23) & 0xFF;
+    let mant = x & 0x7FFFFF;
+    if (exp === 0xFF) { const f16 = (sign<<15) | 0x7C00 | (mant ? 0x200 : 0); return f16; }
+    if (exp === 0) { if (mant === 0) return sign<<15; else { while ((mant & 0x800000) === 0) { mant <<= 1; exp--; } exp++; mant &= ~0x800000; } }
+    exp = exp - 127 + 15;
+    if (exp >= 0x1F) { return (sign<<15) | 0x7C00; }
+    if (exp <= 0) { if (exp < -10) return sign<<15; mant = (mant | 0x800000) >> (1 - exp); const halfMant = (mant + 0x1000) >> 13; return (sign<<15) | halfMant; }
+    const halfMant = (mant + 0x1000) >> 13;
+    return (sign<<15) | (exp<<10) | (halfMant & 0x3FF);
+  }
+
+  /*** Configuration ***/
+  const getCfg = () => ({
+    modelUrlFP32: els.modelUrlFP32.value.trim() || './resnet_exported.onnx', // ⭐ 讀取 FP32 URL
+    modelUrlINT8: els.modelUrlINT8.value.trim() || './image_classifier_model_int8.onnx', // ⭐ 讀取 INT8 URL
+    provider: els.provider.value,
+    W: Math.max(8, parseInt(els.inW.value, 10) || 32),
+    H: Math.max(8, parseInt(els.inH.value, 10) || 32),
+    C: parseInt(els.channels.value, 10) || 3,
+    colorOrder: els.colorOrder.value,
+    keepAspect: els.keepAspect.value,
+    mean: parseCSVNums(els.mean.value, [0.4914, 0.4822, 0.4465]),
+    std: parseCSVNums(els.std.value, [0.247, 0.243, 0.261]),
+    scale: els.scale.value,
+    layout: els.layout.value,
+    dtype: els.dtype.value,
+    qInScale: Number(els.qInScale.value) || 1, qInZero: Math.round(Number(els.qInZero.value) || 0),
+    outQuant: els.outQuant.value, qOutScale: Number(els.qOutScale.value) || 1, qOutZero: Math.round(Number(els.qOutZero.value) || 0),
+    topk: Math.max(1, Math.min(10, parseInt(els.topk.value,10) || 3)),
+    classes: parseCSV(els.classes.value, [
+      'airplane','automobile','bird','cat','deer','dog','frog','horse','ship','truck'
+    ]),
+  });
+
+  /*** Global State ***/
+  let sessionFP32 = null; // ⭐ FP32 Session
+  let sessionINT8 = null; // ⭐ INT8 Session
+  let lastLoadKey = '';
+  let imageBitmap = null; // decoded input image
+
+  /*** Model Loading ***/
+  async function tryCreateSession(url, so) {
+    try { return await ort.InferenceSession.create(url, so); } catch (e) { throw e; }
+  }
+
+  async function loadModel() {
+    const cfg = getCfg();
+    // 檢查兩個模型的狀態
+    const key = `${cfg.modelUrlFP32}|${cfg.modelUrlINT8}|${cfg.provider}`;
+    if (sessionFP32 && sessionINT8 && key === lastLoadKey) { 
+        logAdd('Models already loaded.'); 
+        els.status.textContent = 'Loaded';
+        return true; 
     }
-    // normalize subnormals
-    if (exp === 0) { if (mant === 0) return sign<<15; else { while ((mant & 0x800000) === 0) { mant <<= 1; exp--; } exp++; mant &= ~0x800000; } }
-    exp = exp - 127 + 15;
-    if (exp >= 0x1F) { // overflow -> inf
-      return (sign<<15) | 0x7C00;
-    }
-    if (exp <= 0) { // underflow -> subnormal
-      if (exp < -10) return sign<<15; // too small -> 0
-      mant = (mant | 0x800000) >> (1 - exp);
-      const halfMant = (mant + 0x1000) >> 13; // round
-      return (sign<<15) | halfMant;
-    }
-    const halfMant = (mant + 0x1000) >> 13; // round to 10 bits
-    return (sign<<15) | (exp<<10) | (halfMant & 0x3FF);
-  }
+    
+    // 清除舊的 session
+    sessionFP32 = null; sessionINT8 = null;
 
-  /*** Configuration ***/
-  const getCfg = () => ({
-    modelUrl: els.modelUrl.value.trim() || './model.onnx',
-    provider: els.provider.value,
-    W: Math.max(8, parseInt(els.inW.value, 10) || 32),
-    H: Math.max(8, parseInt(els.inH.value, 10) || 32),
-    C: parseInt(els.channels.value, 10) || 3,
-    colorOrder: els.colorOrder.value, // RGB or BGR
-    keepAspect: els.keepAspect.value, // cover | contain | stretch
-    mean: parseCSVNums(els.mean.value, [0.4914, 0.4822, 0.4465]),
-    std: parseCSVNums(els.std.value, [0.247, 0.243, 0.261]),
-    scale: els.scale.value, // '1/255' | 'none'
-    layout: els.layout.value, // 'NCHW' | 'NHWC'
-    dtype: els.dtype.value, // float32 | float16 | int8
-    qInScale: Number(els.qInScale.value) || 1, qInZero: Math.round(Number(els.qInZero.value) || 0),
-    outQuant: els.outQuant.value, qOutScale: Number(els.qOutScale.value) || 1, qOutZero: Math.round(Number(els.qOutZero.value) || 0),
-    topk: Math.max(1, Math.min(10, parseInt(els.topk.value,10) || 3)),
-    classes: parseCSV(els.classes.value, [
-      'airplane','automobile','bird','cat','deer','dog','frog','horse','ship','truck'
-    ]),
-  });
+    els.status.textContent = 'Loading…';
+    log(`Loading models (FP32: ${cfg.modelUrlFP32}, INT8: ${cfg.modelUrlINT8}) (EP=${cfg.provider})`);
 
-  /*** Global State ***/
-  let session = null; // ort session
-  let lastLoadKey = '';
-  let imageBitmap = null; // decoded input image
+    const primary = { executionProviders: [cfg.provider], graphOptimizationLevel: 'all' };
+    const fallback = { executionProviders: ['wasm'], graphOptimizationLevel: 'all' };
 
-  /*** Model Loading ***/
-  async function tryCreateSession(url, so) {
-    try { return await ort.InferenceSession.create(url, so); } catch (e) { throw e; }
-  }
+    try {
+        // --- 載入 FP32 (含 fallback) ---
+        try {
+          sessionFP32 = await tryCreateSession(cfg.modelUrlFP32, primary);
+          els.epLabel.textContent = cfg.provider;
+        } catch (e) {
+          if (cfg.provider === 'webgl') {
+            logAdd(`FP32 EP=webgl failed → fallback to wasm. Reason: ${e.message}`);
+            sessionFP32 = await tryCreateSession(cfg.modelUrlFP32, fallback);
+            els.epLabel.textContent = 'wasm (fallback)';
+            els.provider.value = 'wasm';
+          } else { throw e; }
+        }
 
-  async function loadModel() {
-    const cfg = getCfg();
-    const key = `${cfg.modelUrl}|${cfg.provider}`;
-    if (session && key === lastLoadKey) { logAdd('Model already loaded.'); return session; }
+        // --- 載入 INT8 (使用確定的 EP) ---
+        logAdd(`Loading INT8 model...`);
+        sessionINT8 = await tryCreateSession(cfg.modelUrlINT8, { executionProviders: [els.provider.value], graphOptimizationLevel: 'all' });
+        
+        lastLoadKey = key;
+        els.status.textContent = 'Loaded';
 
-    els.status.textContent = 'Loading…';
-    log(`Loading model: ${cfg.modelUrl} (EP=${cfg.provider})`);
+        const inName = sessionFP32.inputNames[0];
+        const meta = sessionFP32.inputMetadata?.[inName];
+        let dims = meta?.dims || [1, cfg.C, cfg.H, cfg.W];
+        dims = dims.map((d, i) => (typeof d === 'number' && d > 0) ? d : ([1, cfg.C, cfg.H, cfg.W][i] ?? 1));
+        log(`Models loaded. FP32 Input: ${inName} → [${dims.join(', ')}], type=${meta?.type || 'unknown'}. INT8 loaded successfully.`);
+        return true;
+    } catch (err) {
+      els.status.textContent = 'Error';
+      console.error(err); log(`Failed to load model(s): ${err.message}\n${err.stack || ''}`);
+      sessionFP32 = null; sessionINT8 = null; lastLoadKey = '';
+      return false;
+    }
+  }
 
-    const primary = { executionProviders: [cfg.provider], graphOptimizationLevel: 'all' };
-    const fallback = { executionProviders: ['wasm'], graphOptimizationLevel: 'all' };
+  /*** Image IO ***/
+  function installDrop() {
+    const onFiles = async (files) => {
+      const f = files?.[0]; if (!f) return;
+      try {
+        const img = await createImageBitmap(f);
+        imageBitmap = img;
+        const url = URL.createObjectURL(f);
+        els.preview.src = url;
+        logAdd(`Image loaded: ${f.name} (${img.width}×${img.height})`);
+      } catch (e) { console.error(e); logAdd(`Image decode failed: ${e.message}`); }
+    };
 
-    try {
-      try {
-        session = await tryCreateSession(cfg.modelUrl, primary);
-        els.epLabel.textContent = cfg.provider;
-      } catch (e) {
-        if (cfg.provider === 'webgl') {
-          logAdd(`EP=webgl failed → fallback to wasm. Reason: ${e.message}`);
-          session = await tryCreateSession(cfg.modelUrl, fallback);
-          els.epLabel.textContent = 'wasm (fallback)';
-          els.provider.value = 'wasm';
-        } else { throw e; }
-      }
+    els.file.addEventListener('change', (e) => onFiles(e.target.files));
+    els.drop.addEventListener('click', () => els.file.click());
 
-      lastLoadKey = `${cfg.modelUrl}|${els.epLabel.textContent}`;
-      els.status.textContent = 'Loaded';
+    const d = els.drop;
+    d.addEventListener('dragover', (e)=>{ e.preventDefault(); d.classList.add('drag'); });
+    d.addEventListener('dragleave', ()=> d.classList.remove('drag'));
+    d.addEventListener('drop', (e)=>{ e.preventDefault(); d.classList.remove('drag'); onFiles(e.dataTransfer.files); });
+  }
 
-      const inName = session.inputNames[0];
-      const meta = session.inputMetadata?.[inName];
-      let dims = meta?.dims || [1, cfg.C, cfg.H, cfg.W];
-      dims = dims.map((d, i) => (typeof d === 'number' && d > 0) ? d : ([1, cfg.C, cfg.H, cfg.W][i] ?? 1));
-      log(`Model loaded. Input: ${inName} → [${dims.join(', ')}], type=${meta?.type || 'unknown'}`);
-      return session;
-    } catch (err) {
-      els.status.textContent = 'Error';
-      console.error(err); log(`Failed to load model: ${err.message}\n${err.stack || ''}`);
-      session = null; lastLoadKey = '';
-      throw err;
-    }
-  }
+  /*** Preprocess ***/
+  function drawToCanvas(img, W, H, mode='cover') {
+    let canvas;
+    if (typeof OffscreenCanvas !== 'undefined') { canvas = new OffscreenCanvas(W, H); }
+    else { canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H; }
+    const g = canvas.getContext('2d');
+    g.imageSmoothingEnabled = true;
 
-  /*** Image IO ***/
-  function installDrop() {
-    const onFiles = async (files) => {
-      const f = files?.[0]; if (!f) return;
-      try {
-        const img = await createImageBitmap(f);
-        imageBitmap = img;
-        const url = URL.createObjectURL(f);
-        els.preview.src = url;
-        logAdd(`Image loaded: ${f.name} (${img.width}×${img.height})`);
-      } catch (e) { console.error(e); logAdd(`Image decode failed: ${e.message}`); }
-    };
+    if (mode === 'stretch') { g.drawImage(img, 0, 0, W, H); }
+    else {
+      const rImg = img.width / img.height; const rDst = W / H;
+      let dw=W, dh=H, dx=0, dy=0;
+      if (mode === 'cover') {
+        if (rImg > rDst) { dh = H; dw = H * rImg; dx = (W - dw) / 2; dy = 0; }
+        else { dw = W; dh = W / rImg; dx = 0; dy = (H - dh) / 2; }
+      } else { // contain
+        if (rImg > rDst) { dw = W; dh = W / rImg; dx = 0; dy = (H - dh) / 2; }
+        else { dh = H; dw = H * rImg; dx = (W - dw) / 2; dy = 0; }
+      }
+      g.fillStyle = '#000'; g.fillRect(0,0,W,H);
+      g.drawImage(img, dx, dy, dw, dh);
+    }
+    return g.getImageData(0,0,W,H);
+  }
 
-    els.file.addEventListener('change', (e) => onFiles(e.target.files));
-    els.drop.addEventListener('click', () => els.file.click());
+  function preprocess(img, cfg) {
+    const { W,H,C, colorOrder, mean, std, scale, layout, dtype, qInScale, qInZero } = cfg;
+    const rgba = drawToCanvas(img, W, H, cfg.keepAspect).data;
 
-    const d = els.drop;
-    d.addEventListener('dragover', (e)=>{ e.preventDefault(); d.classList.add('drag'); });
-    d.addEventListener('dragleave', ()=> d.classList.remove('drag'));
-    d.addEventListener('drop', (e)=>{ e.preventDefault(); d.classList.remove('drag'); onFiles(e.dataTransfer.files); });
-  }
+    const N = 1; const size = layout === 'NCHW' ? N*C*H*W : N*H*W*C;
+    const scaleFactor = scale === '1/255' ? 1/255 : 1;
+    const chIndex = (c) => { if (C===1) return 0; if (colorOrder==='RGB') return c; return c===0?2:(c===2?0:1); };
 
-  /*** Preprocess ***/
-  function drawToCanvas(img, W, H, mode='cover') {
-    let canvas;
-    if (typeof OffscreenCanvas !== 'undefined') { canvas = new OffscreenCanvas(W, H); }
-    else { canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H; }
-    const g = canvas.getContext('2d');
-    g.imageSmoothingEnabled = true;
+    const f32 = new Float32Array(size);
 
-    if (mode === 'stretch') { g.drawImage(img, 0, 0, W, H); }
-    else {
-      const rImg = img.width / img.height; const rDst = W / H;
-      let dw=W, dh=H, dx=0, dy=0;
-      if (mode === 'cover') {
-        if (rImg > rDst) { dh = H; dw = H * rImg; dx = (W - dw) / 2; dy = 0; }
-        else { dw = W; dh = W / rImg; dx = 0; dy = (H - dh) / 2; }
-      } else { // contain
-        if (rImg > rDst) { dw = W; dh = W / rImg; dx = 0; dy = (H - dh) / 2; }
-        else { dh = H; dw = H * rImg; dx = (W - dw) / 2; dy = 0; }
-      }
-      g.fillStyle = '#000'; g.fillRect(0,0,W,H);
-      g.drawImage(img, dx, dy, dw, dh);
-    }
-    return g.getImageData(0,0,W,H);
-  }
+    for (let y=0; y<H; y++) {
+      for (let x=0; x<W; x++) {
+        const srcIdx = (y*W + x) * 4;
+        const r = rgba[srcIdx + 0] * scaleFactor;
+        const g = rgba[srcIdx + 1] * scaleFactor;
+        const b = rgba[srcIdx + 2] * scaleFactor;
+        const gray = (r + g + b) / 3;
+        for (let c=0; c<C; c++) {
+          const valRaw = C===1 ? gray : (chIndex(c)===0?r : chIndex(c)===1?g : b);
+          const mu = mean[Math.min(c, mean.length-1)] ?? 0;
+          const sd = std[Math.min(c, std.length-1)] ?? 1;
+          const norm = (valRaw - mu) / (sd || 1);
+          if (layout === 'NCHW') {
+            const dst = c*(H*W) + y*W + x; f32[dst] = norm;
+          } else {
+            const dst = (y*W + x)*C + c; f32[dst] = norm;
+          }
+        }
+      }
+    }
 
-  function preprocess(img, cfg) {
-    const { W,H,C, colorOrder, mean, std, scale, layout, dtype, qInScale, qInZero } = cfg;
-    const rgba = drawToCanvas(img, W, H, cfg.keepAspect).data;
+    let data, type;
+    if (dtype === 'float32') { data = f32; type = 'float32'; }
+    else if (dtype === 'float16') {
+      const u16 = new Uint16Array(size);
+      for (let i=0;i<size;i++) u16[i] = f32ToF16Bits(f32[i]);
+      data = u16; type = 'float16';
+    } else { // int8
+      const q = new Int8Array(size);
+      const s = qInScale || 1; const zp = qInZero || 0;
+      for (let i=0;i<size;i++) {
+        const v = Math.round(f32[i]/s + zp);
+        q[i] = Math.max(-128, Math.min(127, v));
+      }
+      data = q; type = 'int8';
+    }
 
-    const N = 1; const size = layout === 'NCHW' ? N*C*H*W : N*H*W*C;
-    const scaleFactor = scale === '1/255' ? 1/255 : 1;
-    const chIndex = (c) => { if (C===1) return 0; if (colorOrder==='RGB') return c; return c===0?2:(c===2?0:1); };
-
-    // 暫存 float32，統一做正規化
-    const f32 = new Float32Array(size);
-
-    for (let y=0; y<H; y++) {
-      for (let x=0; x<W; x++) {
-        const srcIdx = (y*W + x) * 4;
-        const r = rgba[srcIdx + 0] * scaleFactor;
-        const g = rgba[srcIdx + 1] * scaleFactor;
-        const b = rgba[srcIdx + 2] * scaleFactor;
-        const gray = (r + g + b) / 3;
-        for (let c=0; c<C; c++) {
-          const valRaw = C===1 ? gray : (chIndex(c)===0?r : chIndex(c)===1?g : b);
-          const mu = mean[Math.min(c, mean.length-1)] ?? 0;
-          const sd = std[Math.min(c, std.length-1)] ?? 1;
-          const norm = (valRaw - mu) / (sd || 1);
-          if (layout === 'NCHW') {
-            const dst = c*(H*W) + y*W + x; f32[dst] = norm;
+    const shape = layout === 'NCHW' ? [1, C, H, W] : [1, H, W, C];
+    return { data, shape, type };
+  }
+  
+  /*** Post-process and Compare ***/
+  function compareResults(outFP32, outINT8, msFP32, msINT8, cfg) {
+      // 輔助函式：提取 Top K 結果並處理反量化
+      function getTopK(out, isQuant) {
+          const outData = out.data;
+          
+          let logits;
+          if (isQuant && (out.type === 'int8' || out.type === 'uint8')) {
+              const s = cfg.qOutScale || 1; const zp = cfg.qOutZero || 0;
+              const raw = Array.from(outData);
+              logits = raw.map(v => (Number(v) - zp) * s);
           } else {
-            const dst = (y*W + x)*C + c; f32[dst] = norm;
+              logits = Array.from(outData);
           }
-        }
+
+          const probs = softmax(logits);
+          const top = topK(probs, cfg.topk).map(([i,p]) => ({ idx:i, prob:p, name: cfg.classes[i] ?? `#${i}` }));
+          return top;
       }
+      
+      const topFP32 = getTopK(outFP32, false);
+      const topINT8 = getTopK(outINT8, cfg.outQuant === 'int8');
+
+      const speedup = (msFP32 / msINT8); // 加速比
+      const topClassFP32 = topFP32[0]?.name ?? 'N/A';
+      const topClassINT8 = topINT8[0]?.name ?? 'N/A';
+      const classMatch = (topClassFP32 === topClassINT8) ? "✅ 相同" : "❌ 不同";
+      
+      logAdd(`Comparison: FP32 time ${msFP32.toFixed(2)} ms, INT8 time ${msINT8.toFixed(2)} ms. Speedup: ${speedup.toFixed(2)}x`);
+
+      let html = `
+          <h3 style="margin: 0 0 10px;">📊 性能與準確度比較</h3>
+          <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 15px;">
+              <div class="pill" style="background: #17332c; border-color: #3b6b66;">
+                  <strong>FP32 Time:</strong> ${msFP32.toFixed(2)} ms
+              </div>
+              <div class="pill" style="background: #33172c; border-color: #6b3b66;">
+                  <strong>INT8 Time:</strong> ${msINT8.toFixed(2)} ms
+              </div>
+              <div class="pill" style="background: #202e53; border-color: #3f558a;">
+                  <strong>Speedup (FP32/INT8):</strong> <span style="font-weight: bold; color: #8af;">${speedup.toFixed(2)}×</span>
+              </div>
+              <div class="pill" style="background: #3a2e1d; border-color: #7d6b4d;">
+                  <strong>Top Class Match:</strong> ${classMatch}
+              </div>
+          </div>
+          
+          <div class="flex">
+              <div class="grow card" style="background: #151d32;">
+                  <h4>FP32 (Original) Top ${cfg.topk}</h4>
+                  ${topFP32.map(t => 
+                      `<p style="margin: 5px 0;"><strong>${t.name}:</strong> ${(t.prob*100).toFixed(2)}%</p>`
+                  ).join('')}
+              </div>
+              <div class="grow card" style="background: #151d32;">
+                  <h4>INT8 (Quantized) Top ${cfg.topk}</h4>
+                  ${topINT8.map(t => 
+                      `<p style="margin: 5px 0;"><strong>${t.name}:</strong> ${(t.prob*100).toFixed(2)}%</p>`
+                  ).join('')}
+              </div>
+          </div>
+      `;
+      els.compareResult.innerHTML = html;
+      
+      // 更新 Top 3 Badge (顯示 FP32 結果)
+      [els.pred1, els.pred2, els.pred3].forEach((el, i) => {
+          if (!el) return; const t = topFP32[i];
+          el.textContent = t ? `${t.name}: ${(t.prob*100).toFixed(1)}%` : '—';
+      });
+
+  }
+
+
+  async function runComparison() {
+    const cfg = getCfg();
+    if (!sessionFP32 || !sessionINT8) { 
+        log('Models are not loaded. Attempting to load...');
+        const loaded = await loadModel();
+        if (!loaded) return; 
+    }
+    if (!imageBitmap) { log('Please select an image first.'); return; }
+
+    els.status.textContent = 'Preprocessing…';
+    
+    const inputName = sessionFP32.inputNames[0];
+
+    let dims = null;
+    try { dims = sessionFP32.inputMetadata?.[inputName]?.dims ?? null; } catch {}
+
+    const W = (Array.isArray(dims) && dims.length >= 4 && Number(dims[dims.length-1]) > 0)
+      ? Number(dims[dims.length-1]) : cfg.W;
+    const H = (Array.isArray(dims) && dims.length >= 4 && Number(dims[dims.length-2]) > 0)
+      ? Number(dims[dims.length-2]) : cfg.H;
+    const C = cfg.C;
+
+    // 1. 前處理 (只做一次)
+    const pp = preprocess(imageBitmap, { ...cfg, W, H, C });
+
+    let tensor;
+    try {
+      tensor = new ort.Tensor(pp.type, pp.data, pp.shape);
+    } catch (e) {
+      log(`Failed to create tensor with type=${pp.type}. Check Model/Input settings.\n${e.message}`);
+      els.status.textContent = 'Error';
+      return;
+    }
+
+    const feeds = { [inputName]: tensor };
+
+    els.status.textContent = 'Running FP32 Inference…';
+    log(`Running FP32 inference… Input: ${inputName} ← ${pp.shape.join('×')} (${pp.type})`);
+    
+    let outFP32, outINT8;
+    let msFP32, msINT8;
+
+    try { 
+        // 2. 執行 FP32
+        const t0_fp32 = performance.now();
+        const outMapFP32 = await sessionFP32.run(feeds); 
+        msFP32 = performance.now() - t0_fp32;
+        outFP32 = outMapFP32[sessionFP32.outputNames[0]];
+
+        els.status.textContent = 'Running INT8 Inference…';
+        logAdd(`FP32 Done: ${msFP32.toFixed(2)} ms. Running INT8 inference…`);
+
+        // 3. 執行 INT8
+        const t0_int8 = performance.now();
+        const outMapINT8 = await sessionINT8.run(feeds); 
+        msINT8 = performance.now() - t0_int8;
+        outINT8 = outMapINT8[sessionINT8.outputNames[0]];
+
+    } catch (err) { 
+        console.error(err); 
+        log(`Inference failed: ${err.message}\n${err.stack || ''}`); 
+        els.status.textContent='Error'; 
+        return; 
     }
 
-    // 依需求轉型
-    let data, type;
-    if (dtype === 'float32') { data = f32; type = 'float32'; }
-    else if (dtype === 'float16') {
-      const u16 = new Uint16Array(size);
-      for (let i=0;i<size;i++) u16[i] = f32ToF16Bits(f32[i]);
-      data = u16; type = 'float16';
-    } else { // int8
-      const q = new Int8Array(size);
-      const s = qInScale || 1; const zp = qInZero || 0;
-      for (let i=0;i<size;i++) {
-        const v = Math.round(f32[i]/s + zp);
-        q[i] = Math.max(-128, Math.min(127, v));
-      }
-      data = q; type = 'int8';
-    }
+    // 4. 比較與顯示結果
+    compareResults(outFP32, outINT8, msFP32, msINT8, cfg);
 
-    const shape = layout === 'NCHW' ? [1, C, H, W] : [1, H, W, C];
-    return { data, shape, type };
-  }
+    els.status.textContent = 'Comparison Done';
+  }
+  
+  // 為了保持程式碼結構的完整性，將 runOnce 導向 runComparison
+  const runOnce = runComparison; 
 
-  /*** Run Inference ***/
-  async function runOnce() {
-    const cfg = getCfg();
-    if (!session) { try { await loadModel(); } catch { return; } }
-    if (!imageBitmap) { log('Please select an image first.'); return; }
+  /*** Wire‑up ***/
+  function updateQuantUI() {
+    const dt = els.dtype.value;
+    els.qInBox.classList.toggle('hide', dt !== 'int8');
+    els.qOutBox.classList.toggle('hide', els.outQuant.value !== 'int8');
+  }
+  els.dtype.addEventListener('change', updateQuantUI);
+  els.outQuant.addEventListener('change', updateQuantUI);
+  updateQuantUI();
 
-    els.status.textContent = 'Preprocessing…';
-    const inputName = session.inputNames[0];
+  installDrop();
+  els.loadBtn.addEventListener('click', loadModel);
+  els.compareBtn.addEventListener('click', runComparison); 
+  els.runBtn.addEventListener('click', runComparison); 
 
-    let dims = null;
-    try { dims = session.inputMetadata?.[inputName]?.dims ?? null; } catch {}
-
-    const W = (Array.isArray(dims) && dims.length >= 4 && Number(dims[dims.length-1]) > 0)
-      ? Number(dims[dims.length-1]) : cfg.W;
-    const H = (Array.isArray(dims) && dims.length >= 4 && Number(dims[dims.length-2]) > 0)
-      ? Number(dims[dims.length-2]) : cfg.H;
-    const C = cfg.C;
-
-    const pp = preprocess(imageBitmap, { ...cfg, W, H, C });
-
-    let tensor;
-    try {
-      tensor = new ort.Tensor(pp.type, pp.data, pp.shape);
-    } catch (e) {
-      log(`Failed to create tensor with type=${pp.type}. Try switching dtype to float32 to match the model.\n${e.message}`);
-      els.status.textContent = 'Error';
-      return;
-    }
-
-    els.status.textContent = 'Running…';
-    log(`Running inference… Input: ${inputName} ← ${pp.shape.join('×')} (${pp.type})`);
-    let outMap;
-    try { outMap = await session.run({ [inputName]: tensor }); }
-    catch (err) { console.error(err); log(`Inference failed: ${err.message}\n${err.stack || ''}`); els.status.textContent='Error'; return; }
-
-    const outName = session.outputNames[0];
-    const out = outMap[outName];
-
-    // 讀出輸出資料，必要時反量化
-    let logits;
-    if (cfg.outQuant === 'int8' && (out.type === 'int8' || out.type === 'uint8')) {
-      const s = cfg.qOutScale || 1; const zp = cfg.qOutZero || 0;
-      const raw = Array.from(out.data);
-      logits = raw.map(v => (Number(v) - zp) * s);
-      logAdd(`Dequantized output with scale=${s}, zeroPoint=${zp}.`);
-    } else {
-      logits = Array.from(out.data);
-    }
-
-    const sum = logits.reduce((a,b)=>a+b,0);
-    const probs = (Number.isFinite(sum) && Math.abs(sum-1) < 1e-3) ? logits : softmax(logits);
-
-    const K = cfg.topk; const classes = cfg.classes;
-    const top = topK(probs, K).map(([i,p]) => ({ idx:i, prob:p, name: classes[i] ?? `#${i}` }));
-
-    logAdd('Top results:');
-    top.forEach((t, j) => logAdd(`${j+1}. ${t.name} — ${(t.prob*100).toFixed(2)}% (idx ${t.idx})`));
-
-    [els.pred1, els.pred2, els.pred3].forEach((el, i) => {
-      if (!el) return; const t = top[i];
-      el.textContent = t ? `${t.name}: ${(t.prob*100).toFixed(1)}%` : '—';
-    });
-
-    els.status.textContent = 'Done';
-  }
-
-  /*** Wire‑up ***/
-  function updateQuantUI() {
-    const dt = els.dtype.value;
-    els.qInBox.classList.toggle('hide', dt !== 'int8');
-    els.qOutBox.classList.toggle('hide', els.outQuant.value !== 'int8');
-  }
-  els.dtype.addEventListener('change', updateQuantUI);
-  els.outQuant.addEventListener('change', updateQuantUI);
-  updateQuantUI();
-
-  installDrop();
-  els.loadBtn.addEventListener('click', loadModel);
-  els.runBtn.addEventListener('click', runOnce);
-
-  // 預設自動載入一次
-  loadModel().catch(()=>{});
+  // 預設自動載入一次
+  loadModel().catch(()=>{});
 })();
 </script>
 </body>
 </html>
-
