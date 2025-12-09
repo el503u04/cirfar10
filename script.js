@@ -1,5 +1,7 @@
 // --- 常數設定 ---
-const MODEL_PATH = 'resnet_model.onnx'; // 請確保這是 FP32 或 INT8 模型名稱
+const MODEL_FP32_PATH = "resnet_exported.onnx";
+const MODEL_INT8_PATH = "image_classifier_model_int8.onnx"; // 確保檔名一致!
+
 const INPUT_TENSOR_SIZE = 32 * 32 * 3;
 const IMAGE_SIZE = 32;
 
@@ -8,90 +10,82 @@ const CIFAR10_CLASSES = [
     'dog', 'frog', 'horse', 'ship', 'truck'
 ];
 
-// ⭐ 已更新為您 Python 腳本中的 CIFAR-10 標準化參數 ⭐
+// 標準化參數 (與 Python 腳本一致)
 const NORM_MEAN = [0.4914, 0.4822, 0.4465];
 const NORM_STD = [0.2470, 0.2435, 0.2616]; 
 
 
-// --- DOM 元素快取 ---
+// --- DOM 元素快取與 Sessions ---
 const imageInput = document.getElementById('imageInput');
 const resultDiv = document.getElementById('result');
 const statusDiv = document.getElementById('status');
 const previewImg = document.getElementById('preview');
 
-let inferenceSession = null;
+let sessFP32 = null; // FP32 Session
+let sessINT8 = null; // INT8 Session
+
 
 /**
- * 步驟 1: 初始化 ONNX Runtime 會話並載入模型
+ * 步驟 1: 初始化 ONNX Runtime 會話並載入兩個模型
  */
 async function initializeModel() {
-    statusDiv.textContent = '狀態: 正在載入模型...';
+    statusDiv.textContent = '狀態: 正在載入 FP32 與 INT8 模型...';
     try {
-        // 設定 ONNX Runtime 的執行環境
         ort.env.wasm.numThreads = 1; 
+
+        // 載入 FP32 模型
+        sessFP32 = await ort.InferenceSession.create(
+            MODEL_FP32_PATH, 
+            { executionProviders: ['wasm'] }
+        );
         
-        inferenceSession = await ort.InferenceSession.create(
-            MODEL_PATH, 
+        // 載入 INT8 模型
+        sessINT8 = await ort.InferenceSession.create(
+            MODEL_INT8_PATH, 
             { executionProviders: ['wasm'] }
         );
 
-        statusDiv.textContent = '狀態: 模型載入完成，可以上傳圖片。';
+        statusDiv.textContent = '狀態: 兩模型載入完成，可以上傳圖片。';
         imageInput.disabled = false;
     } catch (e) {
         console.error('模型載入失敗:', e);
-        statusDiv.textContent = `狀態: 錯誤 - 模型載入失敗 (${e.message})，請檢查 ${MODEL_PATH} 是否存在於根目錄。`;
+        statusDiv.textContent = `狀態: 嚴重錯誤 - 至少一個模型載入失敗 (${e.message})，請檢查檔名。`;
     }
 }
 
-/**
- * 步驟 2: 圖片前處理 (Resize, Normalization, HWC -> CHW)
- * @param {HTMLImageElement} imageElement 圖片元素
- * @returns {ort.Tensor} ONNX Runtime 格式的輸入張量
- */
+
+// ----------------------------------------------------------------------
+// 步驟 2: 圖片前處理 (與前一版相同，將圖片轉為張量)
+// ----------------------------------------------------------------------
 function preprocessImage(imageElement) {
     const canvas = document.createElement('canvas');
     canvas.width = IMAGE_SIZE;
     canvas.height = IMAGE_SIZE;
     const ctx = canvas.getContext('2d');
-    
     ctx.drawImage(imageElement, 0, 0, IMAGE_SIZE, IMAGE_SIZE);
     
-    const imageData = ctx.getImageData(0, 0, IMAGE_SIZE, IMAGE_SIZE);
-    const data = imageData.data; 
-    
+    const data = ctx.getImageData(0, 0, IMAGE_SIZE, IMAGE_SIZE).data; 
     const floatData = new Float32Array(INPUT_TENSOR_SIZE); 
     let inputIndex = 0; 
 
-    // 執行標準化和 HWC -> CHW 轉換 (與 Python np.transpose(2,0,1) 邏輯一致)
-    for (let c = 0; c < 3; c++) { // 迴圈遍歷 R(0), G(1), B(2) 三個通道
+    for (let c = 0; c < 3; c++) { 
         for (let i = 0; i < IMAGE_SIZE * IMAGE_SIZE; i++) {
-            
-            // 獲取原始數據在 RGBA 陣列中的位置 (i*4 跳過像素，+c 選擇 R/G/B)
             const dataIndex = i * 4 + c; 
-            
-            // 1. [0, 255] 轉為 [0, 1]
             const normalized = data[dataIndex] / 255.0; 
-            
-            // 2. 應用標準化: (x - mean) / std
             const standardized = (normalized - NORM_MEAN[c]) / NORM_STD[c];
-            
             floatData[inputIndex++] = standardized;
         }
     }
-
-    // 創建 ONNX Runtime 張量 [1, C, H, W]
-    // 假設 ONNX 模型的輸入名稱是 'input'
-    const inputTensor = new ort.Tensor('float32', floatData, [1, 3, IMAGE_SIZE, IMAGE_SIZE]);
-    return inputTensor;
+    // 假設 ONNX 輸入名稱為 'input'
+    return new ort.Tensor('float32', floatData, [1, 3, IMAGE_SIZE, IMAGE_SIZE]);
 }
 
-
 /**
- * 步驟 3: 處理圖片上傳並執行推理
+ * 步驟 3 & 4: 推理與結果比較
  */
 async function handleImageUpload(event) {
     const file = event.target.files[0];
-    if (!file || !inferenceSession) return;
+    if (!file || !sessFP32 || !sessINT8) return;
 
     statusDiv.textContent = '狀態: 圖片處理中...';
     resultDiv.innerHTML = '正在分析...'; 
@@ -103,20 +97,27 @@ async function handleImageUpload(event) {
         const img = new Image();
         img.onload = async () => {
             try {
-                // 1. 前處理
+                // 1. 前處理 (只需一次)
                 const inputTensor = preprocessImage(img);
+                const feeds = { 'input': inputTensor }; // ⚠️ 假設輸入名稱為 'input'
                 
-                statusDiv.textContent = '狀態: 正在執行 ONNX 推理...';
+                statusDiv.textContent = '狀態: 正在執行雙模型推理...';
                 
-                // 2. 執行推理 
-                // ⚠️ 這裡假設 ONNX 模型的輸入名稱是 'input'
-                const feeds = { 'input': inputTensor }; 
+                // 2. FP32 推理
+                const t0_fp32 = performance.now();
+                const resFP32 = await sessFP32.run(feeds);
+                const fp32_ms = (performance.now() - t0_fp32).toFixed(2);
                 
-                const results = await inferenceSession.run(feeds);
+                // 3. INT8 推理
+                const t0_int8 = performance.now();
+                const resINT8 = await sessINT8.run(feeds);
+                const int8_ms = (performance.now() - t0_int8).toFixed(2);
                 
-                // 3. 後處理
-                const outputTensor = results[inferenceSession.outputNames[0]];
-                const formattedResult = postprocessOutput(outputTensor.data);
+                // 4. 後處理與比較
+                const dataFP32 = resFP32[sessFP32.outputNames[0]].data;
+                const dataINT8 = resINT8[sessINT8.outputNames[0]].data;
+                
+                const formattedResult = postprocessCompare(dataFP32, dataINT8, fp32_ms, int8_ms);
                 
                 statusDiv.textContent = '狀態: 推理完成。';
                 resultDiv.innerHTML = formattedResult;
@@ -133,73 +134,87 @@ async function handleImageUpload(event) {
 }
 
 /**
- * 步驟 4: 後處理輸出張量 (Softmax 並格式化)
- * @param {Float32Array} outputData 模型的原始輸出數據 (logits)
+ * 步驟 5: 後處理輸出張量並比較 (Softmax)
+ * @param {Float32Array} outputDataFP32 FP32 Logits
+ * @param {Float32Array} outputDataINT8 INT8 Logits
+ * @param {string} fp32_ms FP32 推理時間 (ms)
+ * @param {string} int8_ms INT8 推理時間 (ms)
  * @returns {string} 格式化的結果 HTML 字串
  */
-function postprocessOutput(outputData) {
-    let maxProbability = -Infinity;
-    let predictedIndex = -1;
+function postprocessCompare(outputDataFP32, outputDataINT8, fp32_ms, int8_ms) {
     
-    // 計算 Softmax (使用 log-sum-exp 避免溢出)
-    const logits = outputData;
-    const probabilities = new Float32Array(logits.length);
-    
-    // 找到最大值
-    let maxLogit = -Infinity;
-    for (let i = 0; i < logits.length; i++) {
-        if (logits[i] > maxLogit) {
-            maxLogit = logits[i];
+    // --- 輔助函式: 計算 Softmax 並排序 ---
+    function getTopK(logits, k = 3) {
+        let maxLogit = -Infinity;
+        for (let i = 0; i < logits.length; i++) {
+            if (logits[i] > maxLogit) {
+                maxLogit = logits[i];
+            }
         }
-    }
-    
-    // 計算 Softmax
-    let sumExp = 0;
-    for (let i = 0; i < logits.length; i++) {
-        probabilities[i] = Math.exp(logits[i] - maxLogit);
-        sumExp += probabilities[i];
-    }
-    
-    // 歸一化並找到最大機率
-    for (let i = 0; i < logits.length; i++) {
-        probabilities[i] /= sumExp;
-        if (probabilities[i] > maxProbability) {
-            maxProbability = probabilities[i];
-            predictedIndex = i;
-        }
-    }
-
-    // 格式化輸出
-    const predictedClass = CIFAR10_CLASSES[predictedIndex];
-    const confidence = (maxProbability * 100).toFixed(2);
-    
-    let html = `
-        <h3>預測結果</h3>
-        <p><strong>🥇 預測類別:</strong> <span style="color: green; font-weight: bold;">${predictedClass}</span></p>
-        <p><strong>信心分數:</strong> ${confidence}%</p>
-        <hr>
-        <h4>Top 5 排名</h4>
-    `;
-    
-    // 顯示前 5 名結果
-    const sortedResults = Array.from(probabilities)
-        .map((prob, index) => ({ prob, class: CIFAR10_CLASSES[index] }))
-        .sort((a, b) => b.prob - a.prob)
-        .slice(0, 5); 
         
-    sortedResults.forEach(item => {
-        html += `<p>${item.class}: ${(item.prob * 100).toFixed(2)}%</p>`;
-    });
+        let sumExp = 0;
+        const probabilities = new Array(logits.length);
+        for (let i = 0; i < logits.length; i++) {
+            probabilities[i] = Math.exp(logits[i] - maxLogit);
+            sumExp += probabilities[i];
+        }
+        
+        const results = Array.from(probabilities)
+            .map((prob, index) => ({ prob: prob / sumExp, class: CIFAR10_CLASSES[index] }))
+            .sort((a, b) => b.prob - a.prob)
+            .slice(0, k);
+            
+        return results;
+    }
+    
+    const top3FP32 = getTopK(outputDataFP32);
+    const top3INT8 = getTopK(outputDataINT8);
+
+    const speedup = (parseFloat(fp32_ms) / parseFloat(int8_ms)).toFixed(2);
+    const topClassFP32 = top3FP32[0].class;
+    const topClassINT8 = top3INT8[0].class;
+    const classMatch = (topClassFP32 === topClassINT8) ? "✅ 相同" : "❌ 不同";
+
+
+    let html = `
+        <h3>📊 性能比較</h3>
+        <p><strong>FP32 時間:</strong> ${fp32_ms} ms</p>
+        <p><strong>INT8 時間:</strong> ${int8_ms} ms</p>
+        <p><strong>加速比 (FP32/INT8):</strong> <span style="font-weight: bold; color: green;">${speedup}×</span></p>
+        <p><strong>最高預測類別是否一致:</strong> ${classMatch}</p>
+        <hr>
+        
+        <div style="display: flex; justify-content: space-between;">
+            <div style="width: 48%;">
+                <h4>FP32 (原始模型) Top 3</h4>
+                ${top3FP32.map(item => 
+                    `<p><strong>${item.class}:</strong> ${(item.prob * 100).toFixed(2)}%</p>`
+                ).join('')}
+            </div>
+            <div style="width: 48%;">
+                <h4>INT8 (量化模型) Top 3</h4>
+                ${top3INT8.map(item => 
+                    `<p><strong>${item.class}:</strong> ${(item.prob * 100).toFixed(2)}%</p>`
+                ).join('')}
+            </div>
+        </div>
+    `;
 
     return html;
 }
 
 // --- 啟動函式 ---
 document.addEventListener('DOMContentLoaded', () => {
+    // 確保圖片預覽區塊顯示正確
+    const previewPlaceholder = document.getElementById('preview-placeholder');
     if (imageInput) {
         imageInput.addEventListener('change', handleImageUpload);
         imageInput.disabled = true; 
     }
+    previewImg.onload = () => {
+        previewImg.style.display = 'block';
+        previewPlaceholder.style.display = 'none';
+    };
     
     // 啟動模型載入
     initializeModel();
